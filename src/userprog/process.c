@@ -16,6 +16,7 @@
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
@@ -37,8 +38,8 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
   /* Create a new thread to execute FILE_NAME. */
+  printf("BEFORE THREAD CREATE %s\n", file_name);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
@@ -54,9 +55,8 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
   char* savePtr;
-
+  printf("FILEDNAME: %s\n", file_name);
   char* file_name_tok = strtok_r(file_name, " ", &savePtr);
-
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -198,7 +198,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char** savePtr, char* file_name);
+static bool setup_stack (void **esp, char** savePtr, const char* file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -429,11 +429,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, char** savePtr, char* file_name)
+setup_stack (void **esp, char** savePtr, const char* file_name)
 {
   uint8_t *kpage;
   bool success = false;
-
+  printf("SETTING UP STACK\n");
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL){
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -444,10 +444,47 @@ setup_stack (void **esp, char** savePtr, char* file_name)
         return success;
       }
   }
-
   // Push onto stack the proper information
   // From http://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC51
-  
+  int argc = 0, argvSize = 2;
+  char** argv = malloc(argvSize*sizeof(char*));
+  // Push tokens onto stack and save address in agrv
+  for(char * tok = (char *) file_name; tok != NULL; tok = strtok_r(NULL, " ", savePtr)){
+    argv[argc] = tok;
+    argc++;
+    *esp -= strlen(tok) + 1;
+    memcpy(*esp, tok, strlen(tok) + 1);
+    if(argvSize <= argc){
+      argvSize *= 2;
+      argv = realloc(argv, argvSize*sizeof(char*));
+    }
+  }
+  argv[argc] = 0;
+  // Word Align
+  if((size_t) *esp % 4){
+    *esp -= (size_t) *esp % 4;
+    memcpy(*esp, &argv[argc], (size_t)*esp % 4);
+  }
+
+  // Push addresses
+  for(int i = argc; i >= 0; i--){
+    *esp -= sizeof(char *);
+    memcpy(*esp, &argv[i], sizeof(char *));
+  }
+
+  // push address of argv
+  *esp -= sizeof(char**);
+  memcpy(*esp, &argv, sizeof(char**));
+
+  // push address of argc
+  *esp -= sizeof(int);
+  memcpy(*esp, &argc, sizeof(int));
+
+  // push fake return
+  *esp -= sizeof(void *);
+  memcpy(*esp, &argv[argc], sizeof(void *));
+  free(argv);
+  hex_dump(0, *esp, (int) ((size_t)PHYS_BASE - (size_t)*esp), true);
 
   return success;
 }
