@@ -438,7 +438,7 @@ setup_stack (void **esp, char** savePtr, char* file_name)
   if (kpage != NULL){
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 12;
       else {
         palloc_free_page (kpage);
         return success;
@@ -447,7 +447,7 @@ setup_stack (void **esp, char** savePtr, char* file_name)
 
   // Push onto stack the proper information
   // From http://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC51
-  
+
 
   return success;
 }
