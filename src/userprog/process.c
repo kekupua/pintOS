@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char** savePtr);
@@ -39,8 +40,8 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
   /* Create a new thread to execute FILE_NAME. */
-  printf("BEFORE THREAD CREATE %s\n", file_name);
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   return tid;
@@ -55,7 +56,6 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
   char* savePtr;
-  printf("FILEDNAME: %s\n", file_name);
   char* file_name_tok = strtok_r(file_name, " ", &savePtr);
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -91,7 +91,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  return -1;
+  while(1) {}
 }
 
 /* Free the current process's resources. */
@@ -433,7 +433,6 @@ setup_stack (void **esp, char** savePtr, const char* file_name)
 {
   uint8_t *kpage;
   bool success = false;
-  printf("SETTING UP STACK\n");
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL){
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
