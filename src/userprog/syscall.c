@@ -10,6 +10,7 @@
 #define USER_VADDR_BOTTOM ((void *) 0x08048000)
 struct lock filesys_lock;
 
+#include "threads/init.h"
 static void syscall_handler (struct intr_frame *);
 int write (int fd, const void *buffer, unsigned size);
 void exit (int status);
@@ -154,3 +155,9 @@ void check_addr (const void *vaddr)
 //   return (int) ptr;
 // }
 //
+
+// pid_t sys_exec(const char *cmd_line){
+//   tid_t pid;
+//   pid = process_execute(cmd_line);
+//   return pid;
+// }
