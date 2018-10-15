@@ -6,11 +6,11 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
+#include "threads/init.h"
 
 #define USER_VADDR_BOTTOM ((void *) 0x08048000)
 struct lock filesys_lock;
 
-#include "threads/init.h"
 static void syscall_handler (struct intr_frame *);
 int write (int fd, const void *buffer, unsigned size);
 void exit (int status);
@@ -25,16 +25,19 @@ syscall_init (void) {
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
   printf ("system call!\n");
   int arg[3];
-  int * p = f->esp;
-  int system_call = * p;
+  int * p = (int *) f->esp + sizeof(f->esp);
+  // int * p = 0xbfffffd8 + 12;
+  int system_call = *p;
   check_addr((const void*) f->esp);
-  printf("VALUE: %d\n", system_call);
+  printf("f->esp: %x\nAddr: %x\nValue: %d\n",f->esp,  p, system_call);
+
   switch (SYS_HALT) {
     case SYS_HALT:
       halt();
+
       break;
     // case SYS_WRITE:
     //   get_arg(f, &arg[0], 3);
@@ -43,7 +46,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
     //   f->eax = write(arg[0], (const void *) arg[1], (unsigned) arg[2]);
     //   break;
   }
-  thread_exit ();
+  thread_exit();
 }
 
 void halt (void) {
@@ -53,11 +56,11 @@ void halt (void) {
 
 void exit (int status) {
   struct thread *cur = thread_current();
-  if (thread_alive(cur->parent))
-    {
-      cur->cp->status = status;
-    }
-  printf ("%s: exit(%d)\n", cur->name, status);
+  // if (thread_alive(cur->parent))
+  //   {
+  //     cur->cp->status = status;
+  //   }
+  // printf ("%s: exit(%d)\n", cur->name, status);
   thread_exit();
 }
 

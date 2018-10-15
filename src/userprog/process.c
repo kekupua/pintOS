@@ -493,6 +493,8 @@ setup_stack (void **esp, char** savePtr, const char* file_name)
   // Push fake return addr
   *esp -= sizeof(void *);
   memcpy(*esp, &argv[argc], sizeof(void *));
+  printf("fake return addr: %x\n", *esp);
+  // f->esp = *esp;
   // Free argv
   free(argv);
 

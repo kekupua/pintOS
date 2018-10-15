@@ -511,10 +511,10 @@ setup_stack (void **esp, const char* file_name, char** save_ptr)
       argc++;
       // Resize argv
       if (argc >= argv_size)
-	{
-	  argv_size *= 2;
-	  argv = realloc(argv, argv_size*sizeof(char *));
-	}
+			{
+			  argv_size *= 2;
+			  argv = realloc(argv, argv_size*sizeof(char *));
+			}
       memcpy(*esp, token, strlen(token) + 1);
     }
   argv[argc] = 0;
