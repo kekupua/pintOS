@@ -22,6 +22,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char** savePtr);
+static struct fd_entry* get_fd_entry(int fd);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -43,9 +44,15 @@ process_execute (const char *file_name)
   file_name = strtok_r((char *) file_name, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  // update thread with userprog properties
+  struct thread *t = thread_get(tid);
+  t->next_fd = 2;
+  t->prog_name = file_name;
+  list_init(&t->desc_table);
+  list_init(&t->children);
   return tid;
 }
 
@@ -65,16 +72,11 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name_tok, &if_.eip, &if_.esp, &savePtr);
-  // if (success) {
-  //       thread_current()->cp->load = 1;
-  // } else{
-  //     thread_current()->cp->load = 2;
-  // }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success)
-    thread_exit ();
+    thread_exit (-1);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -98,18 +100,24 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  while(1) {}
+  while(1) {
+
+  }
 }
 
 /* Free the current process's resources. */
 void
-process_exit (void)
+process_exit (int status)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  // process_close_file(-1);
+  // return if it's a kernel thread
+  if(thread_tid() == 1){
+    return;
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  printf("%s: exit(%d)\n", cur->prog_name, status);
   pd = cur->pagedir;
   if (pd != NULL)
     {
@@ -321,7 +329,11 @@ bool load (const char *file_name, void (**eip) (void), void **esp, char** savePt
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if(success){
+    thread_current()->executable = file;
+    // deny write to executables
+    file_deny_write(file);
+  } else file_close(file);
   return success;
 }
 
@@ -446,8 +458,7 @@ setup_stack (void **esp, char** savePtr, const char* file_name)
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL){
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
+      if (success) *esp = PHYS_BASE;
       else {
         palloc_free_page (kpage);
         return success;
@@ -457,7 +468,6 @@ setup_stack (void **esp, char** savePtr, const char* file_name)
   char *tok;
   int argc = 0, argv_size = 2;
   char **argv = malloc(2*sizeof(char *));
-
   // Push onto stack the proper information
   // From http://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC51
   // Push args onto stack
@@ -472,6 +482,7 @@ setup_stack (void **esp, char** savePtr, const char* file_name)
      }
      memcpy(*esp, tok, strlen(tok) + 1);
   }
+
   argv[argc] = 0;
   // Align to word size (4 bytes)
   int save = (size_t) *esp % WORD_SIZE;
@@ -519,4 +530,42 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+struct fd_entry {
+  int fd;
+  struct file *file;
+  struct list_elem elem;
+};
+
+static struct fd_entry* get_fd_entry(int fd) {
+  struct list_elem *e;
+  struct fd_entry *fe = NULL;
+  struct list *fd_table = &thread_current()->desc_table;
+
+  for (e = list_begin (fd_table); e != list_end (fd_table);
+       e = list_next (e))
+    {
+      struct fd_entry *tmp = list_entry (e, struct fd_entry, elem);
+      if(tmp->fd == fd){
+        fe = tmp;
+        break;
+      }
+    }
+
+  return fe;
+}
+void process_init(void){
+  // the kernel main thread(process) can have children
+  list_init(&thread_current()->children);
+}
+
+int process_write(int fd, const void *buffer, unsigned size) {
+  if (fd == STDOUT_FILENO) {
+    putbuf((char *)buffer, (size_t)size);
+    return (int)size;
+  } else if (get_fd_entry(fd) != NULL) {
+    return (int)file_write(get_fd_entry(fd)->file, buffer, size);
+  }
+  return -1;
 }
