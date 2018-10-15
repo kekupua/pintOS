@@ -18,6 +18,7 @@
 #define MAX_ARGS 4
 #define USER_VADDR_BOTTOM ((void *) 0x08048000)
 
+#include "threads/init.h"
 static void syscall_handler (struct intr_frame *);
 void sys_exit (int status);
 int sys_write(struct  intr_frame *f);
