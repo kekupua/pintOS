@@ -22,6 +22,7 @@
 static void syscall_handler (struct intr_frame *);
 void sys_exit (int status);
 int sys_write(struct  intr_frame *f);
+int sys_wait (pid_t pid);
 static bool is_valid_pointer(void * esp, uint8_t argc);
 void get_arg (struct intr_frame *f, int *arg, int n);
 void check_valid_buffer (void* buffer, unsigned size);
@@ -64,7 +65,6 @@ syscall_init (void) {
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) {
-  printf ("system call!\n");
   int systemCall, result = 0;
 
   if (!is_valid_pointer(f->esp, MAX_ARGS)){
@@ -80,11 +80,16 @@ syscall_handler (struct intr_frame *f UNUSED) {
     case SYS_WRITE:
       result = sys_write(f);
       break;
+    case SYS_WAIT:
+      result = sys_wait(f);
+    case SYS_EXIT:
+      // printf("EXITING\n");
+      sys_exit(result);
     default:
       sys_exit(ERROR);
       break;
   }
-  sys_exit(result);
+  // sys_exit(result);
 }
 
 static bool is_valid_pointer(void * esp, uint8_t argc){
@@ -106,52 +111,46 @@ sys_exit (int status){
 }
 
 int sys_write(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 12)){
+  if (!is_valid_pointer(f->esp + 8, 12)){
     return -1;
   }
-  int fd = *(int *)(f->esp + 4);
-  void *buffer = *(char**)(f->esp + 8);
+  int fd = *(int *)(f->esp + 8);
+  void *buffer = *(char**)(f->esp + 24);
   unsigned size = *(unsigned *)(f->esp + 12);
-  printf("BUFFER %x\n", (uint8_t *)(buffer+size));
-  printf("BASE: %x\n", (uint8_t *)PHYS_BASE);
-  printf("COMP: %d\n", (uint8_t *)(buffer) < (uint8_t *)PHYS_BASE);
-  printf("FIRST: %d, SECOND %d\n", !is_valid_pointer(buffer, 1), !is_valid_pointer(buffer + size, 1));
+
   if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1)){
     return -1;
   }
-  printf("WRITE2\n");
   int written_size = process_write(fd, buffer, size);
-  printf("WRITE3\n");
   f->eax = written_size;
   return 0;
 }
 
-void check_valid_ptr (const void *vaddr)
-{
-  if (!is_user_vaddr(vaddr) || vaddr < USER_VADDR_BOTTOM)
-    {
+int sys_wait (pid_t pid) {
+  return process_wait(pid);
+}
+
+void check_valid_ptr (const void *vaddr){
+  if (!is_user_vaddr(vaddr) || vaddr < USER_VADDR_BOTTOM){
       sys_exit(ERROR);
-    }
+  }
 }
 
 void get_arg (struct intr_frame *f, int *arg, int n) {
   int i;
   int *ptr;
-  for (i = 0; i < n; i++)
-    {
+  for (i = 0; i < n; i++) {
       ptr = (int *) f->esp + i + 1;
       check_valid_ptr(ptr);
       arg[i] = *ptr;
-    }
+  }
 }
 
-void check_valid_buffer (void* buffer, unsigned size)
-{
+void check_valid_buffer (void* buffer, unsigned size){
   unsigned i;
   char* local_buffer = (char *) buffer;
-  for (i = 0; i < size; i++)
-    {
+  for (i = 0; i < size; i++) {
       check_valid_ptr((const void*) local_buffer);
       local_buffer++;
-    }
+  }
 }
