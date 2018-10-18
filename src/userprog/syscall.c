@@ -20,6 +20,7 @@
 static void syscall_handler (struct intr_frame *);
 void sys_halt (void);
 void sys_exit (int status);
+void sys_exec (struct  intr_frame *f);
 int sys_write(struct  intr_frame *f);
 int sys_wait (pid_t pid);
 int sys_open(struct intr_frame *f);
@@ -59,12 +60,10 @@ syscall_handler (struct intr_frame *f) {
 
   switch (systemCall) {
     case SYS_HALT:
-<<<<<<< HEAD
       sys_halt();
-=======
-      halt();
-
->>>>>>> ec8faa367b443c2f07a5b1708f2159af5165543c
+      break;
+    case SYS_EXEC:
+      sys_exec(f);
       break;
     case SYS_WRITE:
       result = sys_write(f);
@@ -81,7 +80,7 @@ syscall_handler (struct intr_frame *f) {
     case SYS_EXIT:
       result = *((int*)f->esp+1);
       sys_exit(result);
-
+      break;
     default:
       sys_exit(ERROR);
       break;
@@ -113,6 +112,20 @@ void sys_halt (void) {
 
 void sys_exit (int status){
   thread_exit (status);
+}
+
+void sys_exec (struct  intr_frame *f){
+  if (!is_valid_pointer(f->esp + 8, 12)){
+    return -1;
+  }
+  void * page_dir;
+  int args[0] = *((int *)f->esp + 1);
+  page_dir = pagedir_get_page(thread_current()->pagedir, (const void *) args[0]);
+  if (page_dir == NULL){
+    return -1;
+  }
+  args[0] = (int) page_dir;
+  f->eax = process_execute((const char *) args[0]);
 }
 
 int sys_write(struct intr_frame *f) {
