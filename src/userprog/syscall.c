@@ -16,16 +16,15 @@
 
 #define ERROR -1
 #define MAX_ARGS 4
-#define USER_VADDR_BOTTOM ((void *) 0x08048000)
 
 static void syscall_handler (struct intr_frame *);
+void sys_halt (void);
 void sys_exit (int status);
 int sys_write(struct  intr_frame *f);
 int sys_wait (pid_t pid);
+int sys_open(struct intr_frame *f);
+int sys_close(struct intr_frame *f);
 static bool is_valid_pointer(void * esp, uint8_t argc);
-void get_arg (struct intr_frame *f, int *arg, int n);
-void check_valid_buffer (void* buffer, unsigned size);
-void check_valid_ptr (const void *vaddr);
 
 
 /* Reads a byte at user virtual address UADDR.
@@ -43,27 +42,13 @@ get_user (const uint8_t *uaddr)
   return result;
 }
 
-/* Writes BYTE to user address UDST.
-   UDST must be below PHYS_BASE.
-   Returns true if successful, false if a segfault occurred. */
-static bool
-put_user (uint8_t *udst, uint8_t byte)
-{
-  if(!is_user_vaddr(udst))
-    return false;
-  int error_code;
-  asm ("movl $1f, %0; movb %b2, %1; 1:"
-       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return error_code != -1;
-}
-
 void
 syscall_init (void) {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
   int systemCall, result = 0;
 
   if (!is_valid_pointer(f->esp, MAX_ARGS)){
@@ -74,25 +59,36 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
   switch (systemCall) {
     case SYS_HALT:
+<<<<<<< HEAD
+      sys_halt();
+=======
       halt();
 
+>>>>>>> ec8faa367b443c2f07a5b1708f2159af5165543c
       break;
     case SYS_WRITE:
       result = sys_write(f);
       break;
     case SYS_WAIT:
       result = sys_wait(f);
+      break;
+    case SYS_OPEN:
+      result = sys_open(f);
+      break;
+    case SYS_CLOSE:
+      result = sys_close(f);
+      break;
     case SYS_EXIT:
-      // printf("EXITING\n");
+      result = *((int*)f->esp+1);
       sys_exit(result);
+
     default:
       sys_exit(ERROR);
       break;
   }
-  // sys_exit(result);
 }
 
-static bool is_valid_pointer(void * esp, uint8_t argc){
+static bool is_valid_pointer(void * esp, uint8_t argc) {
   for (uint8_t i = 0; i < argc; ++i) {
     if (get_user(((uint8_t *)esp)+i) == -1){
       return false;
@@ -102,13 +98,20 @@ static bool is_valid_pointer(void * esp, uint8_t argc){
 
 }
 
-void halt (void) {
+static bool is_valid_string(void * str) {
+  int ch=-1;
+  while((ch=get_user((uint8_t*)str++))!='\0' && ch!=-1);
+    if(ch=='\0')
+      return true;
+    else
+      return false;
+}
+
+void sys_halt (void) {
   shutdown_power_off();
 }
 
-
-void
-sys_exit (int status){
+void sys_exit (int status){
   thread_exit (status);
 }
 
@@ -132,27 +135,21 @@ int sys_wait (pid_t pid) {
   return process_wait(pid);
 }
 
-void check_valid_ptr (const void *vaddr){
-  if (!is_user_vaddr(vaddr) || vaddr < USER_VADDR_BOTTOM){
-      sys_exit(ERROR);
+
+int sys_open(struct intr_frame *f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char **)(f->esp + 4))){
+    return -1;
   }
+  char *str = *(char **)(f->esp + 4);
+  f->eax = process_open(str);
+  return 0;
 }
 
-void get_arg (struct intr_frame *f, int *arg, int n) {
-  int i;
-  int *ptr;
-  for (i = 0; i < n; i++) {
-      ptr = (int *) f->esp + i + 1;
-      check_valid_ptr(ptr);
-      arg[i] = *ptr;
+int sys_close(struct intr_frame *f) {
+  if (!is_valid_pointer(f->esp + 4, MAX_ARGS)){
+    return -1;
   }
-}
-
-void check_valid_buffer (void* buffer, unsigned size){
-  unsigned i;
-  char* local_buffer = (char *) buffer;
-  for (i = 0; i < size; i++) {
-      check_valid_ptr((const void*) local_buffer);
-      local_buffer++;
-  }
+  int fd = *(int *)(f->esp + 4);
+  process_close(fd);
+  return 0;
 }

@@ -672,46 +672,12 @@ int process_write(int fd, const void *buffer, unsigned size) {
   return -1;
 }
 
-void process_close (int fd)
-{
+void process_close (int fd) {
   if (get_fd_entry(fd) != NULL){
     struct fd_entry *fd_entry = get_fd_entry(fd);
     file_close(fd_entry->file);
     list_remove(&fd_entry->elem);
     free(fd_entry);
-  }
-}
-
-int process_read (int fd, void *buffer, unsigned length)
-{
-  if (get_fd_entry(fd) != NULL){
-    struct fd_entry *fd_entry = get_fd_entry(fd);
-    return file_read(fd_entry->file, buffer, length);
-  }
-  return -1;
-}
-
-int process_filesize (int fd)
-{
-  if (get_fd_entry(fd) != NULL){
-    struct fd_entry *fd_entry = get_fd_entry(fd);
-    return file_length(fd_entry->file);
-  }
-  return -1;
-}
-
-int process_tell (int fd)
-{
-  if (get_fd_entry(fd) != NULL){
-    struct fd_entry *fd_entry = get_fd_entry(fd);
-    return file_tell(fd_entry->file);
-  }
-  return -1;
-}
-void process_seek (int fd, unsigned position){
-  if (get_fd_entry(fd) != NULL){
-    struct fd_entry *fd_entry = get_fd_entry(fd);
-    file_seek(fd_entry->file, position);
   }
 }
 
