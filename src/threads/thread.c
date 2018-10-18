@@ -125,7 +125,7 @@ thread_start (void)
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
-thread_tick (void)
+thread_tick (int64_t ticks)
 {
   struct thread *t = thread_current ();
 
@@ -475,13 +475,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
-
-  list_init(&t->file_list);
-  t->fd = MIN_FD;
-
-  list_init(&t->child_list);
-  t->cp = NULL;
-  t->parent = NO_PARENT;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -632,4 +625,11 @@ thread_get(tid_t tid) {
     }
   intr_set_level (old_level);
   return dest_thread;
+}
+bool thread_is_parent_of(tid_t tid){
+    struct thread *t = thread_get(tid);
+    if(t == NULL || t->parent_tid != thread_tid()){
+      return false;
+    }
+    return true;
 }
