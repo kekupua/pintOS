@@ -11,13 +11,8 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-<<<<<<< HEAD
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
-=======
-#include "devices/shutdown.h"
-#include "threads/init.h"
->>>>>>> ky
 
 #define ERROR -1
 #define MAX_ARGS 4
@@ -68,7 +63,6 @@ syscall_init (void) {
 }
 
 static void
-<<<<<<< HEAD
 syscall_handler (struct intr_frame *f UNUSED) {
   int systemCall, result = 0;
 
@@ -79,18 +73,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
   systemCall = * (int *)f->esp;
 
   switch (systemCall) {
-=======
-syscall_handler (struct intr_frame *f) {
-  printf ("system call!\n");
-  int arg[3];
-  int * p = (int *) f->esp + sizeof(f->esp);
-  // int * p = 0xbfffffd8 + 12;
-  int system_call = *p;
-  check_addr((const void*) f->esp);
-  printf("f->esp: %x\nAddr: %x\nValue: %d\n",f->esp,  p, system_call);
-
-  switch (SYS_HALT) {
->>>>>>> ky
     case SYS_HALT:
       halt();
 
@@ -116,31 +98,18 @@ static bool is_valid_pointer(void * esp, uint8_t argc){
       return false;
     }
   }
-<<<<<<< HEAD
   return true;
-=======
-  thread_exit();
->>>>>>> ky
+
 }
 
 void halt (void) {
   shutdown_power_off();
 }
 
-<<<<<<< HEAD
+
 void
 sys_exit (int status){
   thread_exit (status);
-=======
-void exit (int status) {
-  struct thread *cur = thread_current();
-  // if (thread_alive(cur->parent))
-  //   {
-  //     cur->cp->status = status;
-  //   }
-  // printf ("%s: exit(%d)\n", cur->name, status);
-  thread_exit();
->>>>>>> ky
 }
 
 int sys_write(struct intr_frame *f) {
