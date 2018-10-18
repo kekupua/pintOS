@@ -17,7 +17,6 @@
 #define ERROR -1
 #define MAX_ARGS 4
 
-#include "threads/init.h"
 static void syscall_handler (struct intr_frame *);
 void sys_halt (void);
 void sys_exit (int status);
@@ -60,7 +59,12 @@ syscall_handler (struct intr_frame *f) {
 
   switch (systemCall) {
     case SYS_HALT:
+<<<<<<< HEAD
       sys_halt();
+=======
+      halt();
+
+>>>>>>> ec8faa367b443c2f07a5b1708f2159af5165543c
       break;
     case SYS_WRITE:
       result = sys_write(f);
@@ -91,6 +95,7 @@ static bool is_valid_pointer(void * esp, uint8_t argc) {
     }
   }
   return true;
+
 }
 
 static bool is_valid_string(void * str) {
