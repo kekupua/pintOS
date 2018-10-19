@@ -119,7 +119,8 @@ void sys_exec (struct  intr_frame *f){
     return -1;
   }
   void * page_dir;
-  int args[0] = *((int *)f->esp + 1);
+  int args[1];
+  args[0] = *((int *)f->esp + 1);
   page_dir = pagedir_get_page(thread_current()->pagedir, (const void *) args[0]);
   if (page_dir == NULL){
     return -1;
