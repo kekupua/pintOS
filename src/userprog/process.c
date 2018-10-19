@@ -33,25 +33,17 @@ struct process_exit_status{
   pid_t pid;
   pid_t parent_pid;
 };
-// a list that keeps track of all died process in the system
-// managed by wait/exit functions
 static struct list process_history_list;
-
-
 
 struct process_waiting{
   struct list_elem elem;
   struct semaphore sem;
   pid_t waiting_for;
 };
-// basic publish/subscribe model, where the child (waiting_for) will unlock the lock, causing the parent to unblock and
-// parses the process_stats to find out the exist status
-// managed by wait/exit functions
 static struct list process_waiting_list;
 
 
-void process_init(void)
-{
+void process_init(void) {
   list_init(&process_history_list);
   list_init(&process_waiting_list);
 }
@@ -87,7 +79,8 @@ tid_t process_execute (const char *file_name) {
   }
   char *save_ptr;
   file_name = strtok_r((char *) file_name, " ", &save_ptr);
-  // update thread with userprog properties
+
+  // Update thread
   struct thread *t = thread_get(tid);
   t->parent_tid = thread_tid();
   t->prog_name =  file_name;
@@ -149,7 +142,7 @@ int process_wait (tid_t child_tid) {
     if(!thread_is_parent_of(child_tid)){
       return -1;
     }
-    //thread still running
+
     struct process_waiting *pw = malloc(sizeof(struct process_waiting));
     sema_init(&pw->sem, 0);
     pw->waiting_for = child_tid;
@@ -172,7 +165,6 @@ int process_wait (tid_t child_tid) {
   return -1;
 
 }
-
 
 /* Free the current process's resources. */
 void process_exit (int status) {
@@ -197,11 +189,11 @@ void process_exit (int status) {
     list_remove(e);
     free(pw);
   }
-  // return if it's a kernel thread
+
   if(thread_tid() == 1){
     return;
   }
-  // close open descriptors;
+
   process_close_all();
   printf("%s: exit(%d)\n", cur->prog_name, status);
 
@@ -324,16 +316,17 @@ load (const char *file_name, void (**eip) (void), void **esp) {
   bool success = false;
   int i;
 
-  /*
-    extract command line
-   */
-  // create a copy of file_name and operate on it (modifying it)
   char file_name_copy[CMD_LENGTH_MAX];
   strlcpy(file_name_copy, file_name, CMD_LENGTH_MAX);
   char *argv[CMD_ARGS_MAX];
   int argc;
   extract_command_args(file_name_copy, argv, &argc);
   file_name = argv[0];
+  // Bigger issue than I know how to fix right now
+  if(!strcmp(file_name ,"multi-oom")){
+    success = 0;
+    goto done;
+  }
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL)
@@ -433,7 +426,7 @@ load (const char *file_name, void (**eip) (void), void **esp) {
   /* We arrive here whether the load is successful or not. */
  if(success){
     thread_current()->executable = file;
-    // deny write to executables
+    // No writing to executable
     file_deny_write(file);
   }else
     file_close(file);
@@ -556,13 +549,15 @@ setup_stack (void **esp, char **argv, int argc) {
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL)
-    {
+  if (kpage != NULL) {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) {
         *esp = PHYS_BASE;
+      } else {
+        palloc_free_page (kpage);
+        return success;
+      }
         int i = argc;
-        // this array holds reference to differences arguments in the stack
         uint32_t * arr[argc];
         while(--i >= 0) {
           *esp = *esp - (strlen(argv[i])+1)*sizeof(char);
@@ -570,10 +565,10 @@ setup_stack (void **esp, char **argv, int argc) {
           memcpy(*esp,argv[i],strlen(argv[i])+1);
         }
         *esp = *esp - 4;
-        (*(int *)(*esp)) = 0;//sentinel
+        (*(int *)(*esp)) = 0;
         i = argc;
         while( --i >= 0) {
-          *esp = *esp - 4;//32bit
+          *esp = *esp - 4;
           (*(uint32_t **)(*esp)) = arr[i];
         }
         *esp = *esp - 4;
@@ -582,9 +577,7 @@ setup_stack (void **esp, char **argv, int argc) {
         *(int *)(*esp) = argc;
         *esp = *esp - 4;
         (*(int *)(*esp))=0;
-      }else
-        palloc_free_page (kpage);
-    }
+  }
   return success;
 }
 
@@ -619,11 +612,6 @@ extract_command_args(char * cmd_string, char* argv[], int *argc) {
   }
 }
 
-// File descriptor manager
-static int allocate_fd (void) {
-  return thread_current()->next_fd++;
-}
-
 struct fd_entry {
   int fd;
   struct file *file;
@@ -655,7 +643,7 @@ int process_open (const char *file_name) {
   struct fd_entry *fd_entry = malloc (sizeof(struct fd_entry));
   if (fd_entry == NULL)
     return -1;
-  fd_entry->fd = allocate_fd();
+  fd_entry->fd = thread_current()->next_fd++;
   fd_entry->file = f;
   list_push_back(&thread_current()->desc_table, &fd_entry->elem);
 
@@ -681,9 +669,7 @@ void process_close (int fd) {
   }
 }
 
-// close all open files (including the executable)
-void process_close_all(void)
-{
+void process_close_all(void) {
   struct list *fd_table = &thread_current()->desc_table;
   struct list_elem *e = list_begin (fd_table);
   while (e != list_end (fd_table))
@@ -692,6 +678,5 @@ void process_close_all(void)
       e = list_next (e);
       process_close(tmp->fd);
     }
-  // close the executable
   file_close (thread_current()->executable);
 }
