@@ -22,7 +22,7 @@ void sys_halt (void);
 void sys_exit (int status);
 void sys_exec (struct  intr_frame *f);
 int sys_write(struct  intr_frame *f);
-int sys_wait (pid_t pid);
+int sys_wait (struct intr_frame *f);
 int sys_open(struct intr_frame *f);
 int sys_close(struct intr_frame *f);
 static bool is_valid_pointer(void * esp, uint8_t argc);
@@ -51,7 +51,6 @@ syscall_init (void) {
 static void
 syscall_handler (struct intr_frame *f) {
   int systemCall, result = 0;
-
   if (!is_valid_pointer(f->esp, MAX_ARGS)){
     sys_exit(ERROR);
     return;
@@ -78,7 +77,11 @@ syscall_handler (struct intr_frame *f) {
       result = sys_close(f);
       break;
     case SYS_EXIT:
+      if (!is_valid_pointer(f->esp + 4, MAX_ARGS)){
+        thread_exit(ERROR);
+      }
       result = *((int*)f->esp+1);
+      if (result < 0) result = -1;
       sys_exit(result);
       break;
     default:
@@ -98,12 +101,10 @@ static bool is_valid_pointer(void * esp, uint8_t argc) {
 }
 
 static bool is_valid_string(void * str) {
-  int ch=-1;
-  while((ch=get_user((uint8_t*)str++))!='\0' && ch!=-1);
-    if(ch=='\0')
-      return true;
-    else
-      return false;
+  int ch = -1;
+  while((ch = get_user((int*)str++)) != '\0' && ch != -1);
+    if (ch == '\0') return true;
+    else return false;
 }
 
 void sys_halt (void) {
@@ -145,10 +146,15 @@ int sys_write(struct intr_frame *f) {
   return 0;
 }
 
-int sys_wait (pid_t pid) {
-  return process_wait(pid);
+int sys_wait (struct intr_frame *f) {
+  pid_t pid;
+  if (!is_valid_pointer(f->esp + 4, MAX_ARGS)){
+    return ERROR;
+  }
+  pid =  *(int *)(f->esp + 4);
+  f->eax =  process_wait(pid);
+  return 0;
 }
-
 
 int sys_open(struct intr_frame *f) {
   if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char **)(f->esp + 4))){
