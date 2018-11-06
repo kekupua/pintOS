@@ -42,6 +42,10 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+//List of sleeping thread_sleep
+static struct list threads_asleep; //sleeping threads
+
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
   {
@@ -97,6 +101,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&threads_asleep); //Initialize list of threads asleep
+
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -127,6 +133,22 @@ thread_start (void)
 void
 thread_tick (int64_t ticks)
 {
+  struct list_elem *e = list_begin(&threads_asleep);
+  //for each tick, go through each entry of the sleepings threads
+  while(e != list_end(&threads_asleep)){
+      //obtain thread
+      struct thread *this_thread = list_entry(e, struct thread, elem);
+      //if tick matches or is greater wake up the thread
+      if(ticks >= this_thread->wakeup_time){
+        this_thread->wakeup_time = 0; //reset the thread wake up time
+        e = list_remove(e); //remove that thread of sleep queue
+        thread_unblock(this_thread);  //run thread
+      }
+      else{
+        break;
+      }
+  }
+
   struct thread *t = thread_current ();
 
   /* Update statistics. */
@@ -626,6 +648,7 @@ thread_get(tid_t tid) {
   intr_set_level (old_level);
   return dest_thread;
 }
+#ifdef USERPROG
 bool thread_is_parent_of(tid_t tid){
     struct thread *t = thread_get(tid);
     if(t == NULL || t->parent_tid != thread_tid()){
@@ -633,3 +656,4 @@ bool thread_is_parent_of(tid_t tid){
     }
     return true;
 }
+#endif
