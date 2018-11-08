@@ -5,7 +5,10 @@
 #include <list.h>
 #include <stdint.h>
 #include "synch.h"
+<<<<<<< HEAD
 #include "fixed_point.h"
+=======
+>>>>>>> 61aa98fd2c446d4367d2d952d809964b7c1eeccc
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -27,7 +30,12 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 /* Thread prioriy donation. */
+<<<<<<< HEAD
 #define PRIDON_MAX_DEPTH 9              /* Max depth of nested donation. */
+=======
+#define PRI_MAX_NEST 9              /* Max nested donation. */
+
+>>>>>>> 61aa98fd2c446d4367d2d952d809964b7c1eeccc
 
 /* A kernel thread or user process.
 
@@ -94,11 +102,14 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int base_priority;                  /* Base priority for priority donation */
+    int base_priority;                  /* For priority donation */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c, synch.c and timer.c. */
     struct list_elem elem;              /* List element. */
+    struct list locks;                  /* Locks held for priority donation. */
+    struct lock *lock_waiting;          /* Lock waiting on for priority donation. */
+    int64_t wakeup_ticks;               /* Wakeup ticks used by timer sleep */
 
     struct list locks;                  /* Locks held for priority donation. */
     struct lock *lock_waiting;          /* Lock waiting on for priority donation. */
@@ -160,6 +171,18 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_test_preemption (void);
+void thread_add_lock (struct lock *);
+void thread_remove_lock (struct lock *);
+
+void thread_donate_priority (struct thread *);
+void thread_update_priority (struct thread *);
+
+bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED);
+bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux);
+
+struct thread *thread_get(tid_t tid);
 
 void thread_mlfqs_incr_recent_cpu(void);
 void thread_mlfqs_calc_recent_cpu(struct thread *);
