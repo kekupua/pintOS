@@ -4,7 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -157,14 +156,14 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-void thread_test_preemption (void);
-void thread_add_lock (struct lock *);
-void thread_remove_lock (struct lock *);
+void thread_test_yield (void);
+void thread_add_lock (struct lock *lock);
+void thread_remove_lock (struct lock *lock);
 
-void thread_donate_priority (struct thread *);
-void thread_update_priority (struct thread *);
+void thread_donate_priority (struct thread *thread);
+void thread_update_priority (struct thread *thread);
 
-bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED);
+bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux);
 bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux);
 
 struct thread *thread_get(tid_t tid);

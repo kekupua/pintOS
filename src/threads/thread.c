@@ -81,9 +81,9 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 void thread_donate_priority (struct thread *t);
 void thread_update_priority (struct thread *t);
-void thread_test_preemption (void);
-bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED);
-bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED);
+void thread_test_yield (void);
+bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux);
+bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -241,8 +241,8 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  /* Check for preemtpion. */
-  thread_test_preemption ();
+  /* Test if needs to yield. */
+  thread_test_yield ();
 
   return tid;
 }
@@ -388,7 +388,7 @@ thread_set_priority (int new_priority)
      thread. */
   if (new_priority < old_priority && list_empty (&t->locks)){
     t->priority = new_priority;
-    thread_test_preemption ();
+    thread_test_yield ();
   }
 }
 
@@ -635,8 +635,7 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-bool thread_alive (int pid)
-{
+bool thread_alive (int pid) {
   struct list_elem *e;
 
   for (e = list_begin (&all_list); e != list_end (&all_list);
@@ -681,13 +680,10 @@ bool thread_is_parent_of(tid_t tid){
 /* Add a held lock to current thread. */
 void thread_add_lock (struct lock *lock) {
   enum intr_level old_level = intr_disable ();
-  list_insert_ordered (&thread_current ()->locks, &lock->elem, lock_priority_greater, NULL);
-
-  /* Update priority and test preemption if lock's priority
-     is larger than current priority. */
-  if (lock->max_priority > thread_current ()->priority) {
-    thread_current ()->priority = lock->max_priority;
-    thread_test_preemption ();
+  list_insert_ordered (&thread_current()->locks, &lock->elem, lock_priority_greater, NULL);
+  if (lock->max_priority > thread_current()->priority) {
+    thread_current()->priority = lock->max_priority;
+    thread_test_yield ();
   }
   intr_set_level (old_level);
 }
@@ -695,7 +691,6 @@ void thread_add_lock (struct lock *lock) {
 /* Remove a held lock from current thread. */
 void thread_remove_lock (struct lock *lock) {
   enum intr_level old_level = intr_disable ();
-  /* Remove lock from list and update priority. */
   list_remove (&lock->elem);
   thread_update_priority (thread_current ());
   intr_set_level (old_level);
@@ -705,7 +700,6 @@ void thread_remove_lock (struct lock *lock) {
 void thread_donate_priority (struct thread *t) {
   enum intr_level old_level = intr_disable ();
   thread_update_priority (t);
-  /* If thread is in ready list, reorder it. */
   if (t->status == THREAD_READY) {
       list_remove (&t->elem);
       list_insert_ordered (&ready_list, &t->elem, is_priority_greater, NULL);
@@ -713,14 +707,11 @@ void thread_donate_priority (struct thread *t) {
   intr_set_level (old_level);
 }
 
-/* Update thread's priority. This function only update
-   priority and do not preempt. */
 void thread_update_priority (struct thread *t) {
   enum intr_level old_level = intr_disable ();
   int max_priority = t->base_priority;
   int lock_priority;
 
-  /* Get locks' max priority. */
   if (!list_empty (&t->locks)) {
       list_sort (&t->locks, lock_priority_greater, NULL);
       lock_priority = list_entry (list_front (&t->locks), struct lock, elem)->max_priority;
@@ -731,8 +722,8 @@ void thread_update_priority (struct thread *t) {
   intr_set_level (old_level);
 }
 
-/* Test if current thread should be preempted. */
-void thread_test_preemption (void) {
+/* Test if the current thread should be yielded for a higher priority thread */
+void thread_test_yield (void) {
   enum intr_level old_level = intr_disable ();
   if (!list_empty (&ready_list) && thread_current ()->priority < list_entry (list_front (&ready_list), struct thread, elem)->priority) {
       thread_yield ();
@@ -740,8 +731,8 @@ void thread_test_preemption (void) {
   intr_set_level (old_level);
 }
 
-/* Compare priority of two thread. */
-bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED){
+/* Check and compare the priority of 2 threads */
+bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux){
   struct thread *thread1 = list_entry (t1, struct thread, elem);
   int thread1Priority = thread1->priority;
   struct thread *thread2 = list_entry (t2, struct thread, elem);
@@ -750,7 +741,7 @@ bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2,
 }
 
 /* Compare wakeup ticks of two threads */
-bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED) {
+bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux) {
   struct thread *th1 = list_entry (t1, struct thread, elem);
   int t1_ticks = th1->wakeup_ticks;
   struct thread *th2 = list_entry (t2, struct thread, elem);
