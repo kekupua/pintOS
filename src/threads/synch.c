@@ -114,7 +114,7 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))  {
-    list_sort (&sema->waiters, thread_priority_large, NULL);
+    list_sort (&sema->waiters, is_priority_greater, NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
   }
   sema->value++;
@@ -320,8 +320,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   sema_init (&waiter.semaphore, 0);
-  list_insert_ordered (&cond->waiters, &waiter.elem,
-                       cond_sema_priority_large, NULL);
+  list_insert_ordered (&cond->waiters, &waiter.elem, cond_sema_priority_greater, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -343,7 +342,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) {
-      list_sort (&cond->waiters, cond_sema_priority_large, NULL);
+      list_sort (&cond->waiters, cond_sema_priority_greater, NULL);
       sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
   }
 }
@@ -366,10 +365,10 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
 bool
 lock_priority_greater (const struct list_elem *l1, const struct list_elem *l2, void *aux UNUSED) {
-  struct lock *l1 = list_entry (a, struct lock, elem);
-  int l1_max_p = l1->max_priority;
-  struct lock *l2 = list_entry (b, struct lock, elem);
-  int l2_max_p = l2->max_priority;
+  struct lock *lk1 = list_entry (l1, struct lock, elem);
+  int l1_max_p = lk1->max_priority;
+  struct lock *lk2 = list_entry (l2, struct lock, elem);
+  int l2_max_p = lk2->max_priority;
   return l1_max_p >  l2_max_p;
 }
 

@@ -350,8 +350,7 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread)
-    list_insert_ordered (&ready_list, &t->elem, is_priority_greater, NULL);
+  if (cur != idle_thread) list_insert_ordered (&ready_list, &cur->elem, is_priority_greater, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -682,7 +681,7 @@ bool thread_is_parent_of(tid_t tid){
 /* Add a held lock to current thread. */
 void thread_add_lock (struct lock *lock) {
   enum intr_level old_level = intr_disable ();
-  list_insert_ordered (&thread_current ()->locks, &lock->elem, lock_priority_large, NULL);
+  list_insert_ordered (&thread_current ()->locks, &lock->elem, lock_priority_greater, NULL);
 
   /* Update priority and test preemption if lock's priority
      is larger than current priority. */
@@ -709,7 +708,7 @@ void thread_donate_priority (struct thread *t) {
   /* If thread is in ready list, reorder it. */
   if (t->status == THREAD_READY) {
       list_remove (&t->elem);
-      list_insert_ordered (&ready_list, &t->elem, thread_priority_large, NULL);
+      list_insert_ordered (&ready_list, &t->elem, is_priority_greater, NULL);
   }
   intr_set_level (old_level);
 }
@@ -723,7 +722,7 @@ void thread_update_priority (struct thread *t) {
 
   /* Get locks' max priority. */
   if (!list_empty (&t->locks)) {
-      list_sort (&t->locks, lock_priority_large, NULL);
+      list_sort (&t->locks, lock_priority_greater, NULL);
       lock_priority = list_entry (list_front (&t->locks), struct lock, elem)->max_priority;
       if (lock_priority > max_priority) max_priority = lock_priority;
   }
@@ -752,9 +751,9 @@ bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2,
 
 /* Compare wakeup ticks of two threads */
 bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux UNUSED) {
-  struct thread *t1 = list_entry (t1, struct thread, elem);
-  int t1_ticks = t1->wakeup_ticks;
-  struct thread *t2 = list_entry (t2, struct thread, elem);
-  int t2_ticks = t2->wakeup_ticks;
+  struct thread *th1 = list_entry (t1, struct thread, elem);
+  int t1_ticks = th1->wakeup_ticks;
+  struct thread *th2 = list_entry (t2, struct thread, elem);
+  int t2_ticks = th2->wakeup_ticks;
   return t1_ticks < t2_ticks;
 }
