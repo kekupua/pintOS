@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <kernel/list.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
@@ -19,6 +20,9 @@
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
+
+/* Waiting list of timer_sleep */
+struct list sleeping_list;
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
@@ -37,6 +41,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init (&sleeping_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -90,10 +95,20 @@ void
 timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
+  struct thread *cur_thread;
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks)
-    thread_yield ();
+  enum intr_level old_level = intr_disable ();
+
+  /* Get current thread and set wakeup ticks. */
+  cur_thread = thread_current ();
+  cur_thread->wakeup_ticks = timer_ticks () + ticks;
+
+  /* Insert current thread to ordered sleeping list */
+  list_insert_ordered (&sleeping_list, &cur_thread->elem, is_wakeup_ticks_less, NULL);
+  thread_block ();
+
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -170,8 +185,23 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  struct list_elem *pe;
+  struct thread *pt;
+  bool preempt = false;
   ticks++;
   thread_tick (ticks);
+  /* Check and wake up sleeping threads. */
+  while (!list_empty(&sleeping_list)) {
+     pe = list_front (&sleeping_list);
+     pt = list_entry (pe, struct thread, elem);
+     if (pt->wakeup_ticks > ticks) {
+         break;
+     }
+     list_remove (pe);
+     thread_unblock (pt);
+     preempt = true;
+  }
+  if (preempt) intr_yield_on_return ();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
