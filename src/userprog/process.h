@@ -7,9 +7,13 @@
 #define CMD_ARGS_DELIMITER " "
 #define CMD_ARGS_MAX 30
 #define CMD_LENGTH_MAX 100
+typedef int pid_t;
 
-tid_t process_execute (const char *file_name);
-int process_wait (tid_t);
+struct thread *process_current(void);
+pid_t process_pid(void);
+
+pid_t process_execute (const char *file_name);
+int process_wait (pid_t);
 void process_exit (int status);
 void process_activate (void);
 void process_init(void);
