@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <hash.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,10 +24,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
-/* Thread prioriy donation. */
-#define PRI_MAX_NEST 9              /* Max nested donation. */
-
 
 /* A kernel thread or user process.
 
@@ -92,15 +89,12 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int base_priority;                  /* For priority donation */
+    int64_t wakeup_time;                /* when the thread is sleeping, this indicates the wake up time,
+                                          I hate putting this here ):*/
     struct list_elem allelem;           /* List element for all threads list. */
-    int64_t wakeup_time;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list locks;                  /* Locks held for priority donation. */
-    struct lock *lock_waiting;          /* Lock waiting on for priority donation. */
-    int64_t wakeup_ticks;               /* Wakeup ticks used by timer sleep */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -109,11 +103,12 @@ struct thread
     struct list children;
     struct list desc_table;
     int next_fd;
-    struct file *executable;
-    tid_t parent_tid;
-
+    struct file *executable; // file structure referring the the executable, used to deny writing to the file as long as the process is running(and close it upon exit)
 #endif
 
+#ifdef VM
+    struct hash spt; // supplement page directory
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -155,19 +150,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-void thread_test_yield (void);
-void thread_add_lock (struct lock *lock);
-void thread_remove_lock (struct lock *lock);
-
-void thread_donate_priority (struct thread *thread);
-void thread_update_priority (struct thread *thread);
-
-bool is_wakeup_ticks_less(const struct list_elem *t1, const struct list_elem *t2, void *aux);
-bool is_priority_greater(const struct list_elem *t1, const struct list_elem *t2, void *aux);
-
 struct thread *thread_get(tid_t tid);
-
-bool thread_is_parent_of(tid_t tid);
 
 #endif /* threads/thread.h */
